@@ -14,9 +14,33 @@
 14		<link rel=”stylesheet” href=”css/style.css”>
 15	</head>
 16	<body>
+        <nav id ="nav" class="navbar navbar-inverse navbar-fixed-top">
+            <a class="navbar-brand"> <h1>Missing Persons of the United States</h1></a>
+        </nav>
+        
+        <div id ="info" class="container-fluid">
+            <div class="row">
+                <div class="sidebar col-xs-3">
+                    <p> According to the National Missing and Unidentified Persons System (NamUS) more than 600,000 people go missing in the United States every year. In 2019 44% of those missing were under the age of 21. Many of those that go missing are found but many are not. Given that a large percentage of those that go missing are young adults and children it makes sense to do everything we can to help find them. </p>
+                </div>
+                <br>
+                <br>
+                <div id="sources">
+                    <p>This site uses data from the NamUs database. Please visit their website for more information:</p>
+                    <ul style="list-style-type:none">
+                    <li class="active"><a href="https://www.namus.gov/">National Missing and Unidentified Perons System</a></li>
+                </ul>
+                </div>
+            </div>
+        </div>
+        
+        <div id="wrapper">
+            <div id="map"></div>
+        </div><!-- end wrapper -->
+    
 17		<!--scripts-->
-18		<script src=”js/jquery.js”></script>
-19		<script src=”js/leaflet.js”></script>
+18		<script type="text/javascript" src="js/jquery-3.5.1.js"></script>
+        <script type="text/jscript" src="js/leaflet-src.js"></script>
 20		<script src=”js/main.js”></script>
 21	</body>
 22	</html>
