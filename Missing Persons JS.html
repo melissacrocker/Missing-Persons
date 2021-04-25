@@ -1,0 +1,600 @@
+ <!DOCTYPE html>
+  <html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="initial-scale=1, maximum-scale=1, user-scalable=no" />
+    <title>Missing Persons Map</title>
+
+    <!-- Load the Chart.js library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/2.4.0/Chart.min.js"></script>
+      
+    <style>
+      html,
+      body  {
+        padding: 0;
+        margin: 0;
+        height: 100%;
+        width: 100%;
+        overflow: hidden;
+      }
+      #nav  {
+        background-color: #f3f3f3;
+        color: black;
+        padding: 2px;
+        font-size: 20px;
+      }
+      #viewDiv  {
+        position: absolute;
+        left: 0;
+        right: 380px;
+        top: 0;
+        bottom: 0;
+        height: 90%;
+        padding-top: 90px;
+      }
+      #panel    {
+        position: absolute;
+        right: 0;
+        height: 45%;
+        width: 380px;
+      }
+      #infoDiv  {
+        position: absolute;
+        right: 0;
+        background-color: white;
+        color: black;
+        padding: 6px;
+        width: 380px;
+        bottom: 0;
+        padding-bottom: 300px;
+      }
+      #drop-downs   {
+          padding-bottom: 15px;
+      }
+      #credits  {
+        position: absolute;
+        right: 0;
+        bottom: 0;
+        width: 380px;
+        text-align: center;
+        padding-bottom: 2px;
+      }
+    </style>
+      
+    <link rel="stylesheet" href="https://js.arcgis.com/4.18/esri/themes/light/main.css">
+    <script src="https://js.arcgis.com/4.18/"></script>
+    
+    <script>
+        require(["esri/config","esri/Map","esri/views/MapView","esri/layers/FeatureLayer","esri/widgets/Editor","esri/widgets/BasemapToggle","esri/widgets/Legend","esri/widgets/Search","esri/widgets/LayerList","esri/core/watchUtils","esri/layers/GraphicsLayer","esri/geometry/geometryEngine","esri/Graphic","esri/renderers/UniqueValueRenderer"], function (esriConfig, Map, MapView, FeatureLayer, Editor, BasemapToggle, Legend, Search, LayerList, watchUtils, GraphicsLayer, geometryEngine, Graphic, UniqueValueRenderer){
+        esriConfig.apiKey = "AAPK0a29d2799abc4786b7090b93d2c10ef4c70JzCKIml6bSKysVl_fNA7m73c2JfXGY88hyeaZrMpIrK21l4SqYj0wNLqYiYBB";
+        
+       // Define race selector
+        var RaceSelect = document.getElementById("race");
+            
+       // Define age selector
+        var AgeSelect = document.getElementById("age");
+          
+       // Define a pop-up for comments
+        const popupComments = {
+            "title": "Comments",
+            "content": "<b>Comment:</b> {Comment}"
+        }
+        
+        // Define a renderer for comments
+        const commentsRenderer = {
+            type: "simple", 
+            symbol:{
+                type: "simple-marker",
+                style: "circle",
+                color: [240, 196, 22, 0.75],
+                size: 6,
+                outline: {  // autocasts as new SimpleLineSymbol()
+                    width: 0.4,
+                    color: [235, 92, 45]
+                }
+            }
+        }
+        
+        // Comment feature layer
+        const commentLayer = new FeatureLayer({
+            url:"https://services3.arcgis.com/jWmSmlPCLfnPi9cI/arcgis/rest/services/missing_comments/FeatureServer/0",
+            outFields:["Comment"],
+            popupTemplate: popupComments,
+            renderer: commentsRenderer,
+            title: "Comments"
+        });
+          
+        // Create map
+        const map = new Map({
+        basemap: "arcgis-dark-gray", // Basemap layer
+        
+        layers: [commentLayer] //comment layer
+        });
+          
+        // Create map view
+        const view = new MapView({
+            map: map,
+            center: [-98, 38],
+            zoom: 4, // scale: 72223.819286
+            container: "viewDiv",
+            popup: {
+                dockEnabled: true,
+                dockOptions: {
+                    breakpoint: false
+                }
+            },
+            constraints: {
+                snapToZoom: false
+            }
+        });
+          
+        // Basemap toggle
+        const basemapToggle = new BasemapToggle({
+            view: view,
+            nextBasemap: "arcgis-streets"
+        });
+          
+        // Add basemap widget to the view
+        view.ui.add(basemapToggle,"top-left", 1);
+          
+        // Editor widget
+        const editor = new Editor({
+            view: view,
+        });
+          
+        // Add editor widget to the view
+        view.ui.add(editor, {
+            position: "bottom-right",
+        });
+          
+        // Search widget
+        const searchWidget = new Search({
+            view: view
+        });
+        
+        // Add search widget to the view
+        view.ui.add(searchWidget, {
+            position: "top-left",
+            index: 0
+        });
+         
+        // Start of Panel 
+        // helper function for returning a layer instance
+        // based on a given layer title
+        function findLayerByTitle(title) {
+          return view.map.allLayers.find(function(layer) {
+            return layer.title === title;
+          });
+        }
+
+        // When the view loads, set up UI elements
+        let layerList, predominanceLayer;
+
+        view.when(function() {
+          predominanceLayer = findLayerByTitle("Missing Persons");
+          predominanceLayer.outFields = ["*"];
+
+          view.whenLayerView(predominanceLayer).then(function(layerView) {
+            // Update the pie chart after the user stops panning or zooming
+            /*watchUtils.whenTrue(view, "stationary", function(val) {
+              watchUtils.whenFalseOnce(layerView, "updating", function(val) {
+                console.log(val);
+                queryLayerViewStats(layerView).then(function(newData) {
+                  updateChart(newData);
+                });
+              });
+            });*/
+          });
+
+          // Add a LayerList instance to the view with
+          // custom text and a canvas element in the list item panel
+          // for rendering a chart to display query results
+
+          layerList = new LayerList({
+            view: view,
+            container: document.createElement("div"),
+            listItemCreatedFunction: function(event) {
+              const item = event.item;
+
+              // add the pie chart to the Predominance layer list item panel
+              if (item.title === predominanceLayer.title) {
+                item.panel = {
+                  content: [
+                    [
+                      "According to the National Missing and Unidentified Persons System (NamUS) more than 600,000 people go missing in the United States every year. In 2019 44% of those missing were under the age of 21. Many of those that go missing are found but many are not. Given that a large percentage of those that go missing are young adults and children it makes sense to do everything we can to help find them. "
+                    ].join(""),
+
+                    document.createElement("canvas"),
+
+                    [
+                      "Please use the filters to examine the data and comment on any interesting patterns you discover using the editor."
+                    ].join("")
+                  ],
+                  className: "esri-icon-pie-chart",
+                  open: item.visible
+                };
+              }
+            }
+          });
+          layerList.container.style = "height: 100%";
+          let panelDiv = document.getElementById("panel");
+          panelDiv.appendChild(layerList.container);
+        });
+
+        /*// Query the layer view for statistics on each case variable in the layer
+        function queryLayerViewStats(layerView) {
+          const missingFields = [
+            "Sex",
+            "Race___Ethnicity",
+            "State",
+            "Missing_Age",
+            "DLC"
+          ];
+
+          // Creates a query object for statistics of each of the fields listed above
+          const statDefinitions = missingFields.map(function(fieldName) {
+            return {
+              onStatisticField: fieldName,
+              outStatisticFieldName: fieldName + "_TOTAL",
+              statisticType: "sum"
+            };
+          });
+
+          // query statistics for features only in view extent
+          const query = layerView.layer.createQuery();
+          query.outStatistics = statDefinitions;
+          query.geometry = view.extent;
+
+          // query features within the view's extent on the client
+          return layerView.queryFeatures(query).then(function(response) {
+            const stats = response.features[0].attributes;
+
+            const updatedData = [
+              stats.Sex_TOTAL, // sex
+              stats.Race___Ethnicity_TOTAL, // Race
+              stats.State_TOTAL, // State
+              stats.Missing_Age_TOTAL, // missing age
+              stats.DLC_TOTAL
+            ];
+
+            // data used to update the pie chart
+            return {
+              total: stats.DLC_TOTAL, // total population 12+
+              values: updatedData
+            };
+          });
+        }
+
+        // Create a chart to display in a LayerList panel
+        // The chart is created using the Chart.js library
+        let chart, totalCount;
+
+        function updateChart(response) {
+          const newData = response.values;
+          totalCount = response.total;
+          const title = numberWithCommas(totalCount) + " people (age 12+)";
+          if (!chart) {
+            // get the canvas element created in the LayerList
+            // and use it to render the chart
+            const canvasElement = layerList.operationalItems.find(function(item) {
+              return predominanceLayer.title === item.title;
+            }).panel.content[1];
+
+            chart = new Chart(canvasElement.getContext("2d"), {
+              type: "doughnut",
+              data: {
+                labels: [
+                  "No school",
+                  "Preschool",
+                  "Incomplete Elementary",
+                  "Elementary",
+                  "Incomplete Secondary",
+                  "Secondary",
+                  "High School",
+                  "College",
+                  "Not Specified"
+                ],
+                datasets: [
+                  {
+                    label: "Population by educational attainment",
+                    backgroundColor: [
+                      "#9e549c",
+                      "#f789d8",
+                      "#149dcf",
+                      "#ed5050",
+                      "#ffde3e",
+                      "#a6c736",
+                      "#b7804a",
+                      "#fc9220",
+                      "#9e9e9e"
+                    ],
+                    borderColor: "rgb(255, 255, 255)",
+                    borderWidth: 1,
+                    data: newData
+                  }
+                ]
+              },
+              options: {
+                responsive: false,
+                cutoutPercentage: 35,
+                // Not an ArcGIS legend instance. This legend
+                // is constructed for the pie chart, not the
+                // features in the view, though the colors match
+                // the colors of the features displayed in the map view
+                legend: {
+                  position: "bottom"
+                },
+                title: {
+                  display: true,
+                  text: title
+                },
+                tooltips: {
+                  // define custom callback to format data values with commas and %
+                  callbacks: {
+                    label: function(tooltipItem, data) {
+                      const dataIndex = tooltipItem.index;
+                      const value = data.datasets[0].data[dataIndex];
+                      const percentage = totalCount > 0 ? Math.round((value / totalCount) * 100) : 0;
+                      return numberWithCommas(value) + " (" + percentage + "%)";
+                    }
+                  }
+                }
+              }
+            });
+          } else {
+            chart.options.title.text = title;
+            chart.data.datasets[0].data = newData;
+            chart.update();
+          }
+        }
+
+        // helper function for formatting number labels with commas
+        function numberWithCommas(value) {
+          value = value || 0;
+          return value.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+        }*/
+        // End of Panel
+          
+        // Define a pop-up for Cases
+        const popupCases = {
+            "title": "Individual",
+            "content": "<b>Case:</b> {Case_Number}<br><b>Name: </B>{First_Name} {Last_Name}<br><b>Age at Disapperance:</b> {Missing_Age}<br><b>Last Seen:</b> {DLC}<br><b>Sex:</b> {Sex}<br><b>Race/Ethnicity:</b> {Race___Ethnicity}<br><b>Location:</b> {City}, {State}"
+        }
+        
+        // Define a renderer for Cases
+        const casesRenderer = {
+            type: "unique-value", 
+            field: "Sex",
+            defaultSymbol: { type: "simple-fill" },
+            uniqueValueInfos: [{
+                value: "Female",
+                symbol:{
+                    type: "simple-marker",
+                    style: "circle",
+                    color: [115, 27, 204, 0.55],
+                    size: 6,
+                    outline: {  // autocasts as new SimpleLineSymbol()
+                        width: 0.4,
+                        color: [42, 22, 145]
+                    }
+                }
+            },{
+                value: "Male",
+                symbol:{
+                    type: "simple-marker",
+                    style: "circle",
+                    color: [0, 255, 255, 0.55],
+                    size: 6,
+                    outline: {  // autocasts as new SimpleLineSymbol()
+                        width: 0.4,
+                        color: [42, 22, 145]
+                    }
+                }
+            }]
+        };
+        
+        // Add case layer
+        const layer = new FeatureLayer({
+          url: "https://services3.arcgis.com/jWmSmlPCLfnPi9cI/arcgis/rest/services/namus_data_lat_long/FeatureServer",
+            outFields: ["Case_Number","First_Name", "Last_Name", "Missing_Age","DLC", "Sex", "Race___Ethnicity","City", "State"],
+            popupTemplate: popupCases,
+            renderer: casesRenderer,
+            title: "Missing Persons"
+        });
+          
+        map.add(layer);
+          
+        // Start of query
+        // Query all features from the cases layer
+          view
+            .when(function() {
+              return layer.when(function() {
+                var query = layer.createQuery();
+                return layer.queryFeatures(query);
+              });
+            })
+            .then(getValues)
+            .then(getUniqueValues)
+            .then(addToSelect);
+
+          // return an array of all the values in the
+          // race field of the cases layer
+          function getValues(response) {
+            var features = response.features;
+            var values = features.map(function(feature) {
+              return feature.attributes.Race___Ethnicity;
+            });
+            return values;
+          }
+          
+          // return an array of unique values in
+          // the race field of the cases layer
+          function getUniqueValues(values) {
+            var uniqueValues = [];
+
+            values.forEach(function(item, i) {
+              if ((uniqueValues.length < 1 || uniqueValues.indexOf(item) === -1) && item !== "") {
+                uniqueValues.push(item);
+              }
+            });
+            return uniqueValues;
+          }
+
+          // Add the unique values to the race
+          // select element. This will allow the user
+          // to filter cases by race.
+          function addToSelect(values) {
+            values.sort();
+            values.forEach(function(value) {
+              var option = document.createElement("option");
+              option.text = value;
+              RaceSelect.add(option);
+            });
+
+            return setRaceDefinitionExpression(RaceSelect.value);
+          }
+          
+          // return an array of all the values in the
+          // Age field of the cases layer
+          function getValues1(response) {
+            var features1 = response.features;
+            var values1 = features1.map(function(feature) {
+              return feature.attributes.Missing_Age;
+            });
+            return values1;
+            
+          }
+          
+          // return an array of unique values in
+          // the age field of the cases layer
+          function getUniqueValues1(values1) {
+            var uniqueValues1 = [];
+
+            values1.forEach(function(item, i) {
+              if ((uniqueValues1.length < 1 || uniqueValues1.indexOf(item) === -1) && item !== "") {
+                uniqueValues1.push(item);
+              }
+            });
+            return uniqueValues1;
+          }
+
+          // Add the unique values to the age
+          // select element. This will allow the user
+          // to filter cases by age.
+          function addToSelect1(values1) {
+            values1.sort();
+            values1.forEach(function(value) {
+              var option1 = document.createElement("option");
+              option1.text = value;
+              AgeSelect.add(option);
+            });
+
+            return setAgeDefinitionExpression(AgeSelect.value);
+          }
+
+          // set the definition expression on the cases
+          // layer to reflect the selection of the user
+          function setRaceDefinitionExpression(newValue) {
+            layer.definitionExpression = "Race___Ethnicity = '" + newValue + "'";
+
+            if (!layer.visible) {
+              layer.visible = true;
+            }
+
+            return queryForCaseGeometries();
+          }
+            
+          // set the definition expression on the cases
+          // layer to reflect the selection of the user
+          function setAgeDefinitionExpression(newValue) {
+            layer.definitionExpression = "Missing_Age = '" + newValue + "'";
+
+            if (!layer.visible) {
+              layer.visible = true;
+            }
+
+            return queryForCaseGeometries();
+          }
+
+          // Get all the geometries of the cases layer
+          // the createQuery() method creates a query
+          // object that respects the definitionExpression
+          // of the layer
+          function queryForCaseGeometries() {
+            var casesQuery = layer.createQuery();
+            return layer.queryFeatures(casesQuery).then(function(response) {
+              casesGeometries = response.features.map(function(feature) {
+                return feature.geometry;
+              });
+
+              return casesGeometries;
+            });
+          }
+          
+        // set a new definitionExpression on the cases layer
+          RaceSelect.addEventListener("change", function() {
+            var type = event.target.value;
+            setRaceDefinitionExpression(type);
+          });
+          
+        // set a new definitionExpression on the cases layer
+          AgeSelect.addEventListener("change", function() {
+            var type = event.target.value;
+            setAgeDefinitionExpression(type);
+          });
+            
+        // Legend
+        var legend = new Legend({
+            view: view,
+            title: "Legend"
+            
+        });
+
+        // Add legend widget to the view
+        view.ui.add(legend, "bottom-left");
+          
+      });
+      </script>
+    </head>
+    <body>
+        <nav id ="nav" class="navbar navbar-inverse navbar-fixed-top" style="text-align: center">
+            <h1>Missing Persons of the United States</h1>
+        </nav>
+        <div id="viewDiv"></div>
+        <div id="panel"></div>
+        <div id="infoDiv" class="esri-widget">
+            <div id="drop-downs">
+                <b>Select Race/Ethnicity:</b>
+                <select id="race" class="esri-widget"></select>
+            </div>
+            <div class="custom-select" id="drop-downs">
+                <b>Select Missing Age:</b>
+                <select id="age" class="esri-widget">
+                    <option>1-5 year</option>
+                    <option>6-10 year</option>
+                    <option>11-15 year</option>
+                    <option>16-20 year</option>
+                    <option>21-25 year</option>
+                    <option>26-30 year</option>
+                    <option>31-35 year</option>
+                    <option>36-40 year</option>
+                    <option>41-45 year</option>
+                    <option>46-50 year</option>
+                    <option>51-55 year</option>
+                    <option>56-60 year</option>
+                    <option>61-65 year</option>
+                    <option>66-70 year</option>
+                    <option>71-75 year</option>
+                    <option>76-80 year</option>
+                    <option>81-85 year</option>
+                    <option>86-90 year</option>
+                    <option>91-95 year</option>
+                    <option>96-100 year</option>
+                </select>
+            </div>
+        </div>
+        <div id="credits">
+            Data from https://www.namus.gov/
+        </div>
+    </body>
+    </html>
